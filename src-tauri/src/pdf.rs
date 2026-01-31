@@ -28,7 +28,7 @@ pub async fn generate_pdf(pool: &SqlitePool, year: i32) -> AppResult<PathBuf> {
     let notes = db::list_notes(pool, year).await?;
     let balance_curve = db::get_balance_curve(pool, year).await?;
     let title = format!("Foreningsregnskab {}", year);
-    let (mut doc, page1, layer1) = PdfDocument::new(&title, Mm(210.0), Mm(297.0), "Layer 1");
+    let (doc, page1, layer1) = PdfDocument::new(&title, Mm(210.0), Mm(297.0), "Layer 1");
     let font = doc
         .add_builtin_font(BuiltinFont::Helvetica)
         .map_err(|err| AppError::Pdf(format!("Font error: {}", err)))?;
@@ -40,7 +40,7 @@ pub async fn generate_pdf(pool: &SqlitePool, year: i32) -> AppResult<PathBuf> {
     let total_expense = parse_decimal(&preview.total_expense)?;
     let result_total = parse_decimal(&preview.result)?;
 
-    let mut layer = doc.get_page(page1).get_layer(layer1);
+    let layer = doc.get_page(page1).get_layer(layer1);
     let mut cursor_y: f32 = 280.0;
 
     if let Some(line) = settings.pdf_title_line1.as_deref() {
@@ -160,7 +160,7 @@ pub async fn generate_pdf(pool: &SqlitePool, year: i32) -> AppResult<PathBuf> {
     add_footer(&layer, &font, 1, &generated_at);
 
     let (page2, layer2) = doc.add_page(Mm(210.0), Mm(297.0), "Layer 2");
-    let mut layer = doc.get_page(page2).get_layer(layer2);
+    let layer = doc.get_page(page2).get_layer(layer2);
     let mut cursor_y: f32 = 280.0;
 
     add_line(&layer, &mut cursor_y, &font, "Kontobevægelser", 15.0);
@@ -169,7 +169,7 @@ pub async fn generate_pdf(pool: &SqlitePool, year: i32) -> AppResult<PathBuf> {
     let graph_bottom = 150.0;
     render_balance_graph(&layer, graph_top, graph_bottom, &balance_curve);
     cursor_y = graph_bottom - 8.0;
-    cursor_y = render_balance_table(
+    render_balance_table(
         &layer,
         &font,
         cursor_y,
@@ -182,7 +182,7 @@ pub async fn generate_pdf(pool: &SqlitePool, year: i32) -> AppResult<PathBuf> {
     add_footer(&layer, &font, 2, &generated_at);
 
     let (page3, layer3) = doc.add_page(Mm(210.0), Mm(297.0), "Layer 3");
-    let mut layer = doc.get_page(page3).get_layer(layer3);
+    let layer = doc.get_page(page3).get_layer(layer3);
     let mut cursor_y: f32 = 280.0;
 
     add_line(&layer, &mut cursor_y, &font, "Noter til regnskabet", 14.0);
@@ -194,7 +194,7 @@ pub async fn generate_pdf(pool: &SqlitePool, year: i32) -> AppResult<PathBuf> {
 
     cursor_y -= 6.0;
     if settings.signatures_enabled.unwrap_or(true) {
-        cursor_y = render_signature_block(&layer, &font, cursor_y, &settings);
+        render_signature_block(&layer, &font, cursor_y, &settings);
     }
 
     add_footer(&layer, &font, 3, &generated_at);
@@ -213,80 +213,6 @@ pub async fn generate_pdf(pool: &SqlitePool, year: i32) -> AppResult<PathBuf> {
         .map_err(|err| AppError::Pdf(format!("Save error: {}", err)))?;
 
     Ok(path)
-}
-
-fn render_summary_box(
-    layer: &printpdf::PdfLayerReference,
-    font: &IndirectFontRef,
-    start_y: f32,
-    total_income: Decimal,
-    total_expense: Decimal,
-    result_total: Decimal,
-    end_balance: Decimal,
-) -> f32 {
-    let box_left = LEFT_MARGIN_MM;
-    let box_right = PAGE_WIDTH_MM - RIGHT_MARGIN_MM;
-    let box_height = 34.0;
-    let box_top = start_y;
-    let box_bottom = start_y - box_height;
-
-    draw_line(layer, box_left, box_top, box_right, box_top, 0.3);
-    draw_line(layer, box_left, box_bottom, box_right, box_bottom, 0.3);
-    draw_line(layer, box_left, box_bottom, box_left, box_top, 0.3);
-    draw_line(layer, box_right, box_bottom, box_right, box_top, 0.3);
-
-    let mut cursor = box_top - 6.0;
-    draw_text(layer, font, "Kort fortalt", 10.0, box_left + 2.0, cursor);
-    cursor -= 7.0;
-    draw_text(
-        layer,
-        font,
-        &format!("Indtægter i alt: {}", format_kr(total_income)),
-        10.0,
-        box_left + 2.0,
-        cursor,
-    );
-    cursor -= 6.5;
-    draw_text(
-        layer,
-        font,
-        &format!("Udgifter i alt: {}", format_kr_abs(total_expense)),
-        10.0,
-        box_left + 2.0,
-        cursor,
-    );
-    cursor -= 6.5;
-    let result_label = if result_total.is_sign_negative() {
-        "underskud"
-    } else {
-        "overskud"
-    };
-    draw_text(
-        layer,
-        font,
-        &format!(
-            "Årets resultat: {} ({})",
-            format_kr_abs(result_total),
-            result_label
-        ),
-        10.0,
-        box_left + 2.0,
-        cursor,
-    );
-    cursor -= 6.5;
-    draw_text(
-        layer,
-        font,
-        &format!(
-            "Opsparing ved årets slutning (bankbeholdning): {}",
-            format_kr(end_balance)
-        ),
-        10.0,
-        box_left + 2.0,
-        cursor,
-    );
-
-    box_bottom - 6.0
 }
 
 fn render_overview_block(
@@ -437,53 +363,6 @@ fn sum_category_totals(
     Ok((actual_total, budget_current, budget_next))
 }
 
-fn build_table_layout(start_y: f32, preview: &crate::models::ReportPreview) -> TableLayout {
-    let actual_right = PAGE_WIDTH_MM - RIGHT_MARGIN_MM - 45.0;
-    let columns = TableColumns {
-        name_x: LEFT_MARGIN_MM,
-        actual_right,
-        budget_current_right: PAGE_WIDTH_MM - RIGHT_MARGIN_MM - 20.0,
-        budget_next_right: PAGE_WIDTH_MM - RIGHT_MARGIN_MM,
-    };
-
-    let base_sizes = TableFontSizes {
-        header: 8.5,
-        header_small: 7.0,
-        section: 11.0,
-        group: 9.0,
-        row: 8.2,
-        subtotal: 8.2,
-        total: 9.0,
-    };
-
-    let base_gaps = TableGaps {
-        header: 1.0,
-        header_small: 0.8,
-        section: 1.4,
-        group: 1.0,
-        row: 0.8,
-        subtotal: 0.9,
-        total: 1.0,
-        after_group: 1.4,
-        after_section: 1.6,
-        before_result: 2.0,
-    };
-
-    let available_height = start_y - TABLE_BOTTOM_MM;
-    let base_height = estimate_table_height(preview, &base_sizes, &base_gaps);
-    let scale = if available_height > 0.0 {
-        (available_height / base_height).min(1.0)
-    } else {
-        1.0
-    };
-
-    TableLayout {
-        columns,
-        sizes: scale_sizes(base_sizes, scale),
-        gaps: scale_gaps(base_gaps, scale),
-    }
-}
-
 fn build_table_layout_with_counts(start_y: f32, counts: TableRowCounts) -> TableLayout {
     let columns = TableColumns {
         name_x: LEFT_MARGIN_MM,
@@ -557,29 +436,6 @@ fn scale_gaps(gaps: TableGaps, scale: f32) -> TableGaps {
     }
 }
 
-fn estimate_table_height(
-    preview: &crate::models::ReportPreview,
-    sizes: &TableFontSizes,
-    gaps: &TableGaps,
-) -> f32 {
-    let mut height = 0.0;
-    height += line_height(sizes.header, gaps.header);
-    height += line_height(sizes.header_small, gaps.header_small);
-
-    height += line_height(sizes.section, gaps.section);
-    height += estimate_group_height(&preview.income_groups, sizes, gaps);
-    height += line_height(sizes.total, gaps.total);
-
-    height += gaps.after_section;
-    height += line_height(sizes.section, gaps.section);
-    height += estimate_group_height(&preview.expense_groups, sizes, gaps);
-    height += line_height(sizes.total, gaps.total);
-
-    height += gaps.before_result;
-    height += line_height(sizes.total, gaps.total);
-    height
-}
-
 fn estimate_table_height_with_counts(
     counts: TableRowCounts,
     sizes: &TableFontSizes,
@@ -609,25 +465,6 @@ fn estimate_table_height_with_counts(
     if counts.include_result {
         height += gaps.before_result;
         height += line_height(sizes.total, gaps.total);
-    }
-    height
-}
-
-fn estimate_group_height(
-    groups: &[crate::models::ReportGroupSummary],
-    sizes: &TableFontSizes,
-    gaps: &TableGaps,
-) -> f32 {
-    let mut height = 0.0;
-    for (index, group) in groups.iter().enumerate() {
-        height += line_height(sizes.group, gaps.group);
-        for _ in &group.posts {
-            height += line_height(sizes.row, gaps.row);
-        }
-        height += line_height(sizes.subtotal, gaps.subtotal);
-        if index + 1 < groups.len() {
-            height += gaps.after_group;
-        }
     }
     height
 }
@@ -705,79 +542,6 @@ fn render_section_heading(
     draw_text(layer, font, label, layout.sizes.section, layout.columns.name_x, *cursor_y);
     advance_cursor(cursor_y, layout.sizes.section, layout.gaps.section);
     push_line(lines, *cursor_y + layout.gaps.section * 0.5);
-}
-
-fn render_group_table(
-    layer: &printpdf::PdfLayerReference,
-    cursor_y: &mut f32,
-    font: &IndirectFontRef,
-    layout: &TableLayout,
-    groups: &[crate::models::ReportGroupSummary],
-    lines: &mut Vec<f32>,
-) -> AppResult<()> {
-    for (group_index, group) in groups.iter().enumerate() {
-        let group_name = truncate_text(
-            &group.name,
-            layout.columns.actual_right - layout.columns.name_x - 4.0,
-            layout.sizes.group,
-        );
-        draw_text(
-            layer,
-            font,
-            &group_name,
-            layout.sizes.group,
-            layout.columns.name_x,
-            *cursor_y,
-        );
-        advance_cursor(cursor_y, layout.sizes.group, layout.gaps.group);
-        push_line(lines, *cursor_y + layout.gaps.group * 0.5);
-
-        let mut subtotal_actual = Decimal::new(0, 2);
-        let mut subtotal_current = Decimal::new(0, 2);
-        let mut subtotal_next = Decimal::new(0, 2);
-        for post in &group.posts {
-            subtotal_actual += parse_decimal(&post.total)?;
-            if let Some(value) = post.budget_current.as_deref() {
-                subtotal_current += parse_decimal(value)?;
-            }
-            if let Some(value) = post.budget_next.as_deref() {
-                subtotal_next += parse_decimal(value)?;
-            }
-            render_table_row(
-                layer,
-                cursor_y,
-                font,
-                layout,
-                &post.name,
-                post.note_number,
-                &post.total,
-                post.budget_current.as_deref().unwrap_or(""),
-                post.budget_next.as_deref().unwrap_or(""),
-                layout.sizes.row,
-                layout.gaps.row,
-                lines,
-            )?;
-        }
-        render_table_row(
-            layer,
-            cursor_y,
-            font,
-            layout,
-            "Subtotal",
-            None,
-            &subtotal_actual.to_string(),
-            &subtotal_current.to_string(),
-            &subtotal_next.to_string(),
-            layout.sizes.subtotal,
-            layout.gaps.subtotal,
-            lines,
-        )?;
-
-        if group_index + 1 < groups.len() {
-            *cursor_y -= layout.gaps.after_group;
-        }
-    }
-    Ok(())
 }
 
 fn render_category_table(
@@ -861,10 +625,6 @@ fn render_totals_row(
 
 fn format_kr(value: Decimal) -> String {
     format!("{} Kr.", format_danish_decimal(value))
-}
-
-fn format_kr_abs(value: Decimal) -> String {
-    format_kr(value.abs())
 }
 
 fn format_amount(value: &str) -> AppResult<String> {

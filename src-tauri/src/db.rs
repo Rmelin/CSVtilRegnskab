@@ -256,7 +256,7 @@ pub async fn get_progress(pool: &SqlitePool) -> AppResult<ProgressSummary> {
 }
 
 pub async fn get_reconciliation_summary(pool: &SqlitePool, year: i32) -> AppResult<ReconciliationSummary> {
-    let (start_balance, end_balance, movements) = get_balance_summary(pool, year).await?;
+    let (_, _, movements) = get_balance_summary(pool, year).await?;
     let preview = get_report_preview(pool, year).await?;
     let result = parse_decimal(&preview.result)?;
     let difference = movements - result;
@@ -799,7 +799,7 @@ pub async fn get_report_preview(pool: &SqlitePool, year: i32) -> AppResult<Repor
         target.push((post_sort, ReportPostSummary { ..item }));
     }
 
-    let mut income_groups = grouped_income
+    let income_groups = grouped_income
         .into_iter()
         .map(|((_, group_name, group_id), mut posts)| {
             posts.sort_by_key(|(sort, _)| *sort);
@@ -810,7 +810,7 @@ pub async fn get_report_preview(pool: &SqlitePool, year: i32) -> AppResult<Repor
             }
         })
         .collect::<Vec<_>>();
-    let mut expense_groups = grouped_expense
+    let expense_groups = grouped_expense
         .into_iter()
         .map(|((_, group_name, group_id), mut posts)| {
             posts.sort_by_key(|(sort, _)| *sort);
