@@ -1,0 +1,76 @@
+
+########################
+# OS
+########################
+.DS_Store
+Thumbs.db
+
+########################
+# Editors / IDE
+########################
+.vscode/
+.idea/
+*.swp
+
+########################
+# ENV / secrets
+########################
+.env
+.env.*
+*.pem
+*.key
+
+########################
+# Frontend (React)
+########################
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.env.local
+frontend/.env.development
+frontend/.env.production
+
+########################
+# Tauri / Rust
+########################
+src-tauri/target/
+src-tauri/Cargo.lock
+src-tauri/.env
+
+########################
+# SQLX
+########################
+.sqlx/
+
+# (Vigtigt!)
+# Vi ignorerer IKKE migrations, de skal med
+# src-tauri/migrations/  ← denne må IKKE stå her
+
+########################
+# Python (hvis du har tooling)
+########################
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+########################
+# App data / uploads
+########################
+data/
+uploads/
+storage/
+*.db
+*.sqlite
+*.sqlite3
+
+########################
+# Logs
+########################
+*.log
+
+########################
+# Build artefacts
+########################
+*.tgz
+*.zip
