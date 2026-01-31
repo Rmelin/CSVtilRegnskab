@@ -117,7 +117,7 @@ mod tests {
         let transaction = Transaction {
             id: 10,
             text: "Test".to_string(),
-            amount: Decimal::from_str("-10").unwrap(),
+            amount: "-10".to_string(),
         };
 
         let mut matched = None;
