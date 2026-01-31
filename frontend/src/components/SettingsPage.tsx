@@ -295,18 +295,6 @@ export default function SettingsPage({ activeYear, availableYears }: SettingsPag
                 value={settings.board_member_four ?? ""}
                 onChange={(event) => updateField("board_member_four", event.target.value)}
               />
-              <input
-                type="text"
-                placeholder="Revisor"
-                value={settings.auditor_one ?? ""}
-                onChange={(event) => updateField("auditor_one", event.target.value)}
-              />
-              <input
-                type="text"
-                placeholder="Revisor"
-                value={settings.auditor_two ?? ""}
-                onChange={(event) => updateField("auditor_two", event.target.value)}
-              />
             </div>
           </div>
           <div className="card">
