@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { isTauri } from "@tauri-apps/api/core";
@@ -6,13 +6,21 @@ import { importCsv } from "../api/tauri";
 
 type ImportPageProps = {
   activeYear?: number;
+  onCreateYear: (year: number) => Promise<void>;
 };
 
-export default function ImportPage({ activeYear }: ImportPageProps) {
+export default function ImportPage({ activeYear, onCreateYear }: ImportPageProps) {
   const [path, setPath] = useState<string | null>(null);
   const [preview, setPreview] = useState<string[][]>([]);
   const [status, setStatus] = useState<string>("");
+  const [yearDraft, setYearDraft] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (activeYear) {
+      setYearDraft(String(activeYear));
+    }
+  }, [activeYear]);
 
   const decodeBuffer = (buffer: ArrayBuffer) => {
     const utf8 = new TextDecoder("utf-8").decode(buffer);
@@ -86,13 +94,27 @@ export default function ImportPage({ activeYear }: ImportPageProps) {
           <p>Vælg CSV-fil, se preview og importér transaktioner.</p>
           {activeYear ? <p>Arbejdsår: {activeYear}</p> : null}
         </div>
-        <div className="button-row">
+        <div className="button-row import-actions">
           <button type="button" className="primary" onClick={pickFile}>
             Vælg CSV
           </button>
           <button type="button" className="secondary" disabled={!path} onClick={onImport}>
             Importér
           </button>
+          <label className="inline-field">
+            Opret år
+            <input
+              type="number"
+              value={yearDraft}
+              onChange={(event) => setYearDraft(event.target.value)}
+              onBlur={() => {
+                const parsed = Number(yearDraft);
+                if (Number.isFinite(parsed) && parsed > 0) {
+                  onCreateYear(parsed);
+                }
+              }}
+            />
+          </label>
         </div>
       </header>
       <div className="panel-body">
