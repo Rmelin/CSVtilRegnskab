@@ -22,6 +22,7 @@ import {
 
 const pages = [
   "Import",
+  "Administrer",
   "Kontering",
   "Budget",
   "Regler",
@@ -36,7 +37,6 @@ export default function App() {
   const [page, setPage] = useState<Page>("Import");
   const [activeClub, setActiveClubState] = useState<string | null>(null);
   const [clubs, setClubs] = useState<string[]>([]);
-  const [clubSelectorOpen, setClubSelectorOpen] = useState(false);
   const [clubError, setClubError] = useState<string | null>(null);
   const [activeYear, setActiveYearState] = useState<number | null>(null);
   const [availableYears, setAvailableYears] = useState<number[]>([]);
@@ -52,7 +52,6 @@ export default function App() {
     Promise.all([listClubs(), getActiveClub()]).then(([list, active]) => {
       setClubs(list);
       setActiveClubState(active ?? null);
-      setClubSelectorOpen(active == null);
     });
   }, []);
 
@@ -65,6 +64,12 @@ export default function App() {
       const merged = new Set([...years.years, active.year]);
       setAvailableYears(Array.from(merged).sort());
     });
+  }, [activeClub]);
+
+  useEffect(() => {
+    if (!activeClub) {
+      setPage("Administrer");
+    }
   }, [activeClub]);
 
   const applyTheme = (value: "light" | "dark" | "system") => {
@@ -105,7 +110,6 @@ export default function App() {
   const activateClub = async (slug: string) => {
     await setActiveClub(slug);
     setActiveClubState(slug);
-    setClubSelectorOpen(false);
   };
 
   const handleSelectClub = async (slug: string) => {
@@ -135,7 +139,6 @@ export default function App() {
       await refreshClubs();
       if (slug === activeClub) {
         setActiveClubState(null);
-        setClubSelectorOpen(true);
       }
     } catch (error) {
       setClubError(String(error));
@@ -155,25 +158,54 @@ export default function App() {
     }
   };
 
-  const showClubSelector = !activeClub || clubSelectorOpen;
+  const adminContent = (
+    <>
+      <section className="panel">
+        <header className="panel-header">
+          <div>
+            <h2>Administrer</h2>
+            <p>Skift tema og administrer klubber.</p>
+          </div>
+        </header>
+        <div className="panel-body">
+          <div className="form-row">
+            <label className="inline-field">
+              Tema
+              <select value={theme} onChange={(event) => setTheme(event.target.value as typeof theme)}>
+                <option value="light">Lys</option>
+                <option value="dark">Mørk (Mocha)</option>
+                <option value="system">System</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      </section>
+      <ClubSelector
+        clubs={clubs}
+        activeClub={activeClub}
+        error={clubError}
+        onSelect={handleSelectClub}
+        onCreate={handleCreateClub}
+        onDelete={handleDeleteClub}
+        onRename={handleRenameClub}
+      />
+    </>
+  );
 
   const content = useMemo(() => {
-    if (showClubSelector) {
-      return (
-        <ClubSelector
-          clubs={clubs}
-          activeClub={activeClub}
-          error={clubError}
-          onSelect={handleSelectClub}
-          onCreate={handleCreateClub}
-          onDelete={handleDeleteClub}
-          onRename={handleRenameClub}
-        />
-      );
+    if (!activeClub && page !== "Administrer") {
+      return adminContent;
     }
     switch (page) {
       case "Import":
-        return <ImportPage activeYear={activeYear ?? undefined} />;
+        return (
+          <ImportPage
+            activeYear={activeYear ?? undefined}
+            onCreateYear={onChangeYear}
+          />
+        );
+      case "Administrer":
+        return adminContent;
       case "Kontering":
         return <KonteringPage activeYear={activeYear ?? undefined} />;
       case "Budget":
@@ -197,7 +229,6 @@ export default function App() {
         return null;
     }
   }, [
-    showClubSelector,
     clubs,
     activeClub,
     clubError,
@@ -207,7 +238,8 @@ export default function App() {
     handleRenameClub,
     page,
     activeYear,
-    availableYears
+    availableYears,
+    theme
   ]);
 
   return (
@@ -220,32 +252,7 @@ export default function App() {
           <p className="app-subtitle">Bankimport, kontering og rapportering</p>
         </div>
         <div className="year-select">
-          <label>
-            Tema
-            <select value={theme} onChange={(event) => setTheme(event.target.value as typeof theme)}>
-              <option value="light">Lys</option>
-              <option value="dark">Mørk (Mocha)</option>
-              <option value="system">System</option>
-            </select>
-          </label>
           {activeClub ? (
-            <label>
-              Klub
-              <div className="form-row">
-                <select value={activeClub} onChange={(event) => handleSelectClub(event.target.value)}>
-                  {clubs.map((club) => (
-                    <option key={club} value={club}>
-                      {club}
-                    </option>
-                  ))}
-                </select>
-                <button type="button" className="ghost" onClick={() => setClubSelectorOpen(true)}>
-                  Administrer
-                </button>
-              </div>
-            </label>
-          ) : null}
-          {activeClub && !showClubSelector ? (
             <>
               <label>
                 Arbejdsaar
@@ -263,32 +270,21 @@ export default function App() {
                   ))}
                 </select>
               </label>
-              <label>
-                Opret år
-                <input
-                  type="number"
-                  value={activeYear ?? ""}
-                  onChange={(event) => setActiveYearState(Number(event.target.value))}
-                  onBlur={(event) => onChangeYear(Number(event.target.value))}
-                />
-              </label>
             </>
           ) : null}
         </div>
-        {!showClubSelector ? (
-          <nav className="app-nav">
-            {pages.map((label) => (
-              <button
-                key={label}
-                type="button"
-                className={page === label ? "nav-button active" : "nav-button"}
-                onClick={() => setPage(label)}
-              >
-                {label}
-              </button>
-            ))}
-          </nav>
-        ) : null}
+        <nav className="app-nav">
+          {pages.map((label) => (
+            <button
+              key={label}
+              type="button"
+              className={page === label ? "nav-button active" : "nav-button"}
+              onClick={() => setPage(label)}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
       </header>
       <main className="app-content">{content}</main>
     </div>
