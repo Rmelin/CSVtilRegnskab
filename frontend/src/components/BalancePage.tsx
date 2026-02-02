@@ -87,7 +87,7 @@ export default function BalancePage({ activeYear }: BalancePageProps) {
     <section className="panel">
       <header className="panel-header">
         <div>
-          <h2>Saldo-graf</h2>
+          <h2>Kontobevægelse</h2>
           <p>Saldo pr. dag for hele året (inkl. dage uden transaktioner).</p>
         </div>
         <div className="form-row">
