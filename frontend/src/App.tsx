@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import ImportPage from "./components/ImportPage";
 import KonteringPage from "./components/KonteringPage";
 import BudgetPage from "./components/BudgetPage";
@@ -20,21 +20,19 @@ import {
   setActiveYear
 } from "./api/tauri";
 
-const pages = [
-  "Import",
-  "Administrer",
-  "Kontering",
-  "Budget",
-  "Regler",
-  "Rapport",
-  "Afstemning",
-  "Saldo-graf",
-  "Opsætning"
+const navItems = [
+  { label: "Kontering", children: ["Import", "Budget", "Regler"] },
+  { label: "Rapport", children: ["Opsætning", "Afstemning", "Kontobevægelse"] },
+  { label: "Administrer" }
 ] as const;
-type Page = (typeof pages)[number];
+type NavItem = (typeof navItems)[number];
+type ChildPage = NavItem extends { children: readonly (infer Child)[] } ? Child : never;
+type Page = NavItem["label"] | ChildPage;
 
 export default function App() {
   const [page, setPage] = useState<Page>("Import");
+  const [openMenu, setOpenMenu] = useState<NavItem["label"] | null>(null);
+  const navRef = useRef<HTMLElement | null>(null);
   const [activeClub, setActiveClubState] = useState<string | null>(null);
   const [clubs, setClubs] = useState<string[]>([]);
   const [clubError, setClubError] = useState<string | null>(null);
@@ -71,6 +69,33 @@ export default function App() {
       setPage("Administrer");
     }
   }, [activeClub]);
+
+  useEffect(() => {
+    setOpenMenu(null);
+  }, [page]);
+
+  useEffect(() => {
+    if (!openMenu) return;
+
+    const handlePointer = (event: MouseEvent) => {
+      if (!navRef.current) return;
+      if (!navRef.current.contains(event.target as Node)) {
+        setOpenMenu(null);
+      }
+    };
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpenMenu(null);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointer);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handlePointer);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [openMenu]);
 
   const applyTheme = (value: "light" | "dark" | "system") => {
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -216,7 +241,7 @@ export default function App() {
         return <ReportPage activeYear={activeYear ?? undefined} />;
       case "Afstemning":
         return <ReconciliationPage activeYear={activeYear ?? undefined} />;
-      case "Saldo-graf":
+      case "Kontobevægelse":
         return <BalancePage activeYear={activeYear ?? undefined} />;
       case "Opsætning":
         return (
@@ -273,17 +298,61 @@ export default function App() {
             </>
           ) : null}
         </div>
-        <nav className="app-nav">
-          {pages.map((label) => (
-            <button
-              key={label}
-              type="button"
-              className={page === label ? "nav-button active" : "nav-button"}
-              onClick={() => setPage(label)}
-            >
-              {label}
-            </button>
-          ))}
+        <nav className="app-nav" ref={navRef}>
+          {navItems.map((item) => {
+            if ("children" in item) {
+              const isGroupActive =
+                page === item.label || item.children.includes(page as (typeof item.children)[number]);
+              const isOpen = openMenu === item.label;
+              const submenuItems = [item.label, ...item.children];
+              return (
+                <div className={isOpen ? "nav-group open" : "nav-group"} key={item.label}>
+                  <button
+                    type="button"
+                    className={isGroupActive ? "nav-button nav-parent active" : "nav-button nav-parent"}
+                    onClick={() => setOpenMenu((current) => (current === item.label ? null : item.label))}
+                    aria-haspopup="menu"
+                    aria-expanded={isOpen}
+                  >
+                    {item.label}
+                    <span className="nav-caret" aria-hidden="true">
+                      v
+                    </span>
+                  </button>
+                  <div className="nav-menu" role="menu" aria-label={`${item.label} menu`}>
+                    {submenuItems.map((child) => (
+                      <button
+                        key={child}
+                        type="button"
+                        className={page === child ? "nav-button nav-child active" : "nav-button nav-child"}
+                        onClick={() => {
+                          setPage(child as Page);
+                          setOpenMenu(null);
+                        }}
+                        role="menuitem"
+                      >
+                        {child}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            }
+
+            return (
+              <button
+                key={item.label}
+                type="button"
+                className={page === item.label ? "nav-button active" : "nav-button"}
+                onClick={() => {
+                  setPage(item.label);
+                  setOpenMenu(null);
+                }}
+              >
+                {item.label}
+              </button>
+            );
+          })}
         </nav>
       </header>
       <main className="app-content">{content}</main>
